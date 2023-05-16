@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use swc_core::common::*;
 use swc_core::ecma::ast::{Ident, ImportDecl, ImportSpecifier, ModuleExportName, Tpl, TplElement};
 use swc_core::ecma::{
@@ -6,20 +7,36 @@ use swc_core::ecma::{
 };
 use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
 
-const INTERPOLATION_PLACEHOLDER: &str = r#"!TAGGED_MD_INTERPOLATION_PLACEHOLDER!"#;
-
 struct TplElementInfo {
     span: Span,
     tail: bool,
 }
 
+#[derive(Deserialize)]
+pub struct PluginConfig {
+    #[serde(alias = "interpolationPlaceholder")]
+    interpolation_placeholder: String,
+}
+
+impl Default for PluginConfig {
+    fn default() -> Self {
+        Self {
+            interpolation_placeholder: r#"!TAGGED_MD_INTERPOLATION_PLACEHOLDER!"#.to_string(),
+        }
+    }
+}
+
 pub struct TransformVisitor {
+    config: PluginConfig,
     tag_idents: Vec<Ident>,
 }
 
 impl TransformVisitor {
-    pub fn new() -> Self {
-        Self { tag_idents: vec![] }
+    pub fn new(config: PluginConfig) -> Self {
+        Self {
+            config,
+            tag_idents: vec![],
+        }
     }
 }
 
@@ -83,7 +100,8 @@ impl VisitMut for TransformVisitor {
                         (str_vec, info_vec)
                     },
                 );
-            let interpolation_replaced = element_strings.join(INTERPOLATION_PLACEHOLDER);
+            let interpolation_replaced =
+                element_strings.join(&self.config.interpolation_placeholder);
             let lines = interpolation_replaced.lines();
             let mut min_indent = 0;
             let merged = lines
@@ -105,7 +123,7 @@ impl VisitMut for TransformVisitor {
                 exprs: tpl.tpl.exprs.clone(),
                 span: tpl.span,
                 quasis: transformed
-                    .split(INTERPOLATION_PLACEHOLDER)
+                    .split(&self.config.interpolation_placeholder)
                     .zip(infos)
                     .map(|(s, info)| TplElement {
                         span: info.span,
@@ -121,8 +139,12 @@ impl VisitMut for TransformVisitor {
 }
 
 #[plugin_transform]
-pub fn process_transform(program: Program, _metadata: TransformPluginProgramMetadata) -> Program {
-    program.fold_with(&mut as_folder(TransformVisitor::new()))
+pub fn process_transform(program: Program, metadata: TransformPluginProgramMetadata) -> Program {
+    let config = metadata
+        .get_transform_plugin_config()
+        .map(|json| serde_json::from_str::<PluginConfig>(&json).unwrap())
+        .unwrap_or_default();
+    program.fold_with(&mut as_folder(TransformVisitor::new(config)))
 }
 
 #[cfg(test)]
@@ -136,7 +158,7 @@ mod tests {
 
     test!(
         Default::default(),
-        |_| as_folder(TransformVisitor::new()),
+        |_| as_folder(TransformVisitor::new(PluginConfig::default())),
         processes_markdown_paragraph,
         r#"
 import { md } from "tagged-md";
@@ -150,7 +172,7 @@ console.log(`<p>foo</p>`);
 
     test!(
         Default::default(),
-        |_| as_folder(TransformVisitor::new()),
+        |_| as_folder(TransformVisitor::new(PluginConfig::default())),
         processes_markdown_bold,
         r#"
 import { md } from "tagged-md";
@@ -164,7 +186,7 @@ console.log(`<p><strong>foo</strong></p>`);
 
     test!(
         Default::default(),
-        |_| as_folder(TransformVisitor::new()),
+        |_| as_folder(TransformVisitor::new(PluginConfig::default())),
         processes_escaped_markdown,
         r#"
 import { md } from "tagged-md";
@@ -178,7 +200,7 @@ console.log(`<p><strong><code>foo</code></strong></p>`);
 
     test!(
         Default::default(),
-        |_| as_folder(TransformVisitor::new()),
+        |_| as_folder(TransformVisitor::new(PluginConfig::default())),
         deindents_indented_markdown,
         r#"
 import { md } from "tagged-md";
@@ -195,7 +217,7 @@ console.log(`<h1>Yay</h1>
 
     test!(
         Default::default(),
-        |_| as_folder(TransformVisitor::new()),
+        |_| as_folder(TransformVisitor::new(PluginConfig::default())),
         processes_expression_interpolation,
         r#"
 import { md } from "tagged-md";
@@ -209,7 +231,7 @@ console.log(`<p><strong><code>${foo}</code></strong></p>`);
 
     test!(
         Default::default(),
-        |_| as_folder(TransformVisitor::new()),
+        |_| as_folder(TransformVisitor::new(PluginConfig::default())),
         processes_complex_expression_interpolation,
         r#"
 import { md } from "tagged-md";
@@ -231,7 +253,7 @@ import { md } from "tagged-md";
         Default::default(),
         |_| chain!(
             resolver(Mark::new(), Mark::new(), false),
-            as_folder(TransformVisitor::new())
+            as_folder(TransformVisitor::new(PluginConfig::default()))
         ),
         only_processes_tag_from_module,
         r#"
