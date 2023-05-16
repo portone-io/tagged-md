@@ -42,8 +42,8 @@ impl VisitMut for TransformVisitor {
                                 line.to_string()
                             }
                         })
-                        .map(|line| line + "\n")
-                        .collect::<String>();
+                        .collect::<Vec<_>>()
+                        .join("\n");
                     *expr = Lit::Str(Str {
                         span: DUMMY_SP,
                         value: markdown::to_html(&merged).into(),
@@ -93,6 +93,14 @@ test!(
         # Yay
 
         **\`foo\`**
-        `);"#,
+    `);"#,
     r#"console.log("<h1>Yay</h1>\n<p><strong><code>foo</code></strong></p>\n");"#
+);
+
+test!(
+    Default::default(),
+    |_| as_folder(TransformVisitor),
+    processes_expression_interpolation,
+    r#"console.log(md`**\`${foo}\`**`);"#,
+    r#"console.log("<p><strong><code>${foo}</code></strong></p>\n");"#
 );
