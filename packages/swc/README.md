@@ -9,7 +9,7 @@ Install `swc`, this plugin, and `tagged-md`, then configure `swc` to use this pl
 ```tsx
 import { md } from "tagged-md"
 
-const content = md`
+const content = md({ gfm: true })`
 # Hello, world!
 
 This content will be transformed into HTML **during build time.**

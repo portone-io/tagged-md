@@ -1,6 +1,12 @@
+use std::borrow::Cow;
+
+use derive_builder::Builder;
 use serde::Deserialize;
 use swc_core::common::*;
-use swc_core::ecma::ast::{Ident, ImportDecl, ImportSpecifier, ModuleExportName, Tpl, TplElement};
+use swc_core::ecma::ast::{
+    Callee, ExprOrSpread, Ident, ImportDecl, ImportSpecifier, Lit, ModuleExportName, Prop,
+    PropName, PropOrSpread, Tpl, TplElement,
+};
 use swc_core::ecma::{
     ast::{Expr, Program},
     visit::{as_folder, FoldWith, VisitMut, VisitMutWith},
@@ -13,13 +19,77 @@ struct TplElementInfo {
     tail: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Builder)]
 pub struct PluginConfig {
     #[serde(alias = "interpolationPlaceholder")]
     #[serde(default = "default_interpolation_placeholder")]
+    #[builder(default = "default_interpolation_placeholder()")]
     interpolation_placeholder: String,
     #[serde(default)]
+    #[builder(default)]
     gfm: bool,
+}
+
+impl PluginConfig {
+    fn try_from_ast(ast: &Expr) -> Result<Self, &str> {
+        match ast {
+            Expr::Object(object) => {
+                let mut config_builder = PluginConfigBuilder::default();
+
+                for item in object.props.iter() {
+                    match item {
+                        PropOrSpread::Prop(prop) => match &**prop {
+                            Prop::KeyValue(kv) => {
+                                let key = match &kv.key {
+                                    PropName::Ident(ident) => ident.sym.to_string(),
+                                    PropName::Str(str) => str.value.to_string(),
+                                    _ => return Err("Only static string keys are supported in the config literal."),
+                                };
+                                match key.as_str() {
+                                    "interpolationPlaceholder" => {
+                                        if let Expr::Lit(lit) = &*kv.value {
+                                            if let Lit::Str(str) = &lit {
+                                                config_builder.interpolation_placeholder(
+                                                    str.value.clone().to_string(),
+                                                );
+                                            } else {
+                                                return Err("Expected a string literal for the `interpolationPlaceholder` config.");
+                                            }
+                                        } else {
+                                            return Err("Expected a string literal for the `interpolationPlaceholder` config.");
+                                        }
+                                    }
+                                    "gfm" => {
+                                        if let Expr::Lit(lit) = &*kv.value {
+                                            if let Lit::Bool(boolean) = &lit {
+                                                config_builder.gfm(boolean.value);
+                                            } else {
+                                                return Err("Expected a boolean literal for the `gfm` config.");
+                                            }
+                                        } else {
+                                            return Err(
+                                                "Expected a boolean literal for the `gfm` config.",
+                                            );
+                                        }
+                                    }
+                                    _ => return Err("Unknown key in the config literal."),
+                                }
+                            }
+                            _ => return Err(
+                                "Only key-value properties are supported in the config literal.",
+                            ),
+                        },
+                        PropOrSpread::Spread(_) => {
+                            return Err("Spreads in the config literal are not supported.")
+                        }
+                    }
+                }
+
+                Ok(config_builder.build().unwrap())
+            }
+            _ => Err("Expected an object literal."),
+        }
+    }
 }
 
 pub fn default_interpolation_placeholder() -> String {
@@ -76,12 +146,64 @@ impl VisitMut for TransformVisitor {
         expr.visit_mut_children_with(self);
 
         if let Expr::TaggedTpl(tpl) = expr {
-            let should_transform = match tpl.tag.as_mut() {
-                Expr::Ident(ident) => self
-                    .tag_idents
-                    .iter()
-                    .any(|tag_ident| tag_ident.eq_ignore_span(&ident)),
-                _ => false,
+            let (should_transform, config) = match tpl.tag.as_mut() {
+                Expr::Ident(ident) => (
+                    self.tag_idents
+                        .iter()
+                        .any(|tag_ident| tag_ident.eq_ignore_span(&ident)),
+                    Cow::Borrowed(&self.config),
+                ),
+                Expr::Call(call) => {
+                    let should_transform = match &call.callee {
+                        Callee::Expr(expr) => match &**expr {
+                            Expr::Ident(ident) => self
+                                .tag_idents
+                                .iter()
+                                .any(|tag_ident| tag_ident.eq_ignore_span(&ident)),
+                            _ => false,
+                        },
+                        _ => false,
+                    };
+                    if call.args.len() != 1 {
+                        HANDLER.with(|handler| {
+                            handler
+                                .struct_span_err(
+                                    call.span,
+                                    "Expected exactly one argument to `md` function.",
+                                )
+                                .emit();
+                        });
+                        return;
+                    }
+
+                    let config = match call.args.first().unwrap() {
+                        ExprOrSpread { spread: None, expr } => {
+                            match PluginConfig::try_from_ast(&*expr) {
+                                Ok(config) => config,
+                                Err(err) => {
+                                    HANDLER.with(|handler| {
+                                        handler.struct_span_err(call.span, err).emit();
+                                    });
+                                    return;
+                                }
+                            }
+                        }
+                        _ => {
+                            HANDLER.with(|handler| {
+                                handler
+                                    .struct_span_err(
+                                        call.span,
+                                        "Spread arguments are not supported in `md` function.",
+                                    )
+                                    .emit();
+                            });
+                            return;
+                        },
+                    };
+
+                    (should_transform, Cow::Owned(config))
+                }
+                _ => return,
             };
 
             if !should_transform {
@@ -109,8 +231,7 @@ impl VisitMut for TransformVisitor {
                         (str_vec, info_vec)
                     },
                 );
-            let interpolation_replaced =
-                element_strings.join(&self.config.interpolation_placeholder);
+            let interpolation_replaced = element_strings.join(&config.interpolation_placeholder);
             let lines = interpolation_replaced.lines();
             let mut min_indent = 0;
             let merged = lines
@@ -129,7 +250,7 @@ impl VisitMut for TransformVisitor {
                 .join("\n");
             let transformed = markdown::to_html_with_options(
                 &merged,
-                &match self.config {
+                &match config.as_ref() {
                     PluginConfig { gfm: true, .. } => markdown::Options::gfm(),
                     PluginConfig { gfm: false, .. } => markdown::Options::default(),
                 },
@@ -140,7 +261,7 @@ impl VisitMut for TransformVisitor {
                         exprs: tpl.tpl.exprs.clone(),
                         span: tpl.span,
                         quasis: transformed
-                            .split(&self.config.interpolation_placeholder)
+                            .split(&config.interpolation_placeholder)
                             .zip(infos)
                             .map(|(s, info)| TplElement {
                                 span: info.span,
