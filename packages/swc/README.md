@@ -4,10 +4,10 @@ SWC plugin for transforming tagged Markdown string to HTML.
 
 ## Usage
 
-Install `swc` and this plugin, then configure `swc` to use this plugin.
+Install `swc`, this plugin, and `tagged-md`, then configure `swc` to use this plugin.
 
 ```tsx
-const md = String.raw
+import { md } from "tagged-md"
 
 const content = md`
 # Hello, world!
