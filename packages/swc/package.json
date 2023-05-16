@@ -1,0 +1,16 @@
+{
+    "name": "swc-plugin-tagged-md",
+    "version": "0.1.0",
+    "description": "SWC plugin for transforming tagged Markdown string to HTML",
+    "author": "XiNiHa <me@xiniha.dev>",
+    "license": "MIT",
+    "keywords": [
+        "swc-plugin"
+    ],
+    "main": "target/wasm32-unknown-unknown/release/swc.wasm",
+    "scripts": {
+        "prepublishOnly": "cargo build-wasm32 --release"
+    },
+    "files": [],
+    "preferUnplugged": true
+}
