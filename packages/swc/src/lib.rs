@@ -22,7 +22,7 @@ impl VisitMut for TransformVisitor {
                     }
                     *expr = Lit::Str(Str {
                         span: DUMMY_SP,
-                        value: markdown::to_html(&tpl.tpl.quasis.first().unwrap().raw.to_string()).into(),
+                        value: markdown::to_html(&tpl.tpl.quasis.first().unwrap().cooked.as_ref().unwrap().to_string()).into(),
                         raw: None,
                     })
                     .into()
@@ -51,4 +51,12 @@ test!(
     processes_markdown_bold,
     r#"console.log(md`**foo**`);"#,
     r#"console.log("<p><strong>foo</strong></p>");"#
+);
+
+test!(
+    Default::default(),
+    |_| as_folder(TransformVisitor),
+    processes_escaped_markdown,
+    r#"console.log(md`**\`foo\`**`);"#,
+    r#"console.log("<p><strong><code>foo</code></strong></p>");"#
 );
