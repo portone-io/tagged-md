@@ -1,7 +1,8 @@
 {
   "license": "(Apache-2.0 OR MIT)",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "examples/*"
   ],
   "scripts": {
     "lint": "eslint . --fix"
