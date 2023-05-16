@@ -16,14 +16,20 @@ struct TplElementInfo {
 #[derive(Deserialize)]
 pub struct PluginConfig {
     #[serde(alias = "interpolationPlaceholder")]
+    #[serde(default = "default_interpolation_placeholder")]
     interpolation_placeholder: String,
+    #[serde(default)]
     gfm: bool,
+}
+
+pub fn default_interpolation_placeholder() -> String {
+    r#"!TAGGED_MD_INTERPOLATION_PLACEHOLDER!"#.to_string()
 }
 
 impl Default for PluginConfig {
     fn default() -> Self {
         Self {
-            interpolation_placeholder: r#"!TAGGED_MD_INTERPOLATION_PLACEHOLDER!"#.to_string(),
+            interpolation_placeholder: default_interpolation_placeholder(),
             gfm: false,
         }
     }
