@@ -1,0 +1,30 @@
+{
+  "name": "tagged-md",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Transform tagged Markdown string to HTML",
+  "author": "XiNiHa <me@xiniha.dev>",
+  "license": "(Apache-2.0 OR MIT)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/portone-io/tagged-md.git",
+    "directory": "packages/tagged-md"
+  },
+  "scripts": {
+    "build": "nanobundle build"
+  },
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "types": "./dist/index.d.ts",
+    "require": "./dist/index.cjs",
+    "import": "./dist/index.mjs"
+  },
+  "devDependencies": {
+    "nanobundle": "^1.6.0",
+    "typescript": "^5.0.4"
+  },
+  "files": [
+    "dist"
+  ]
+}
