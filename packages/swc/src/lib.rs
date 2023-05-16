@@ -9,7 +9,7 @@ use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata
 
 pub struct TransformVisitor;
 
-const INTERPOLATION_PLACEHOLDER: &str = r#"\\TAGGED_MD_INTERPOLATION_PLACEHOLDER\\"#;
+const INTERPOLATION_PLACEHOLDER: &str = r#"!TAGGED_MD_INTERPOLATION_PLACEHOLDER!"#;
 
 struct TplElementInfo {
     span: Span,
@@ -132,4 +132,21 @@ test!(
     processes_expression_interpolation,
     r#"console.log(md`**\`${foo}\`**`);"#,
     r#"console.log(`<p><strong><code>${foo}</code></strong></p>`);"#
+);
+
+test!(
+    Default::default(),
+    |_| as_folder(TransformVisitor),
+    processes_complex_expression_interpolation,
+    r#"md`
+    The identifier of the PG module and the store ${"I" + "D"} to use.
+
+    Should be written in the following format.
+
+    **\`{PG module identifier}.{Store ID}\`**
+  `"#,
+    r#"`<p>The identifier of the PG module and the store ${"I" + "D"} to use.</p>
+<p>Should be written in the following format.</p>
+<p><strong><code>{PG module identifier}.{Store ID}</code></strong></p>
+`"#
 );
