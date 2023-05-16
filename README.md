@@ -1,5 +1,7 @@
 # tagged-md
 
+See [packages/core/README.md](packages/core/README.md) for details, [or check out the examples!](examples)
+
 --------
 
 Packages under *portone-io/tagged-md* are primarily distributed under the terms of
