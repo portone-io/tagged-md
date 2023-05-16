@@ -12,7 +12,7 @@
     "keywords": [
         "swc-plugin"
     ],
-    "main": "target/wasm32-unknown-unknown/release/swc.wasm",
+    "main": "target/wasm32-unknown-unknown/release/swc_plugin_tagged_md.wasm",
     "scripts": {
         "prepublishOnly": "cargo build-wasm32 --release"
     },
