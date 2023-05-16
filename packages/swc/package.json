@@ -1,6 +1,6 @@
 {
   "name": "swc-plugin-tagged-md",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "SWC plugin for transforming tagged Markdown string to HTML",
   "author": "XiNiHa <me@xiniha.dev>",
   "license": "(Apache-2.0 OR MIT)",
