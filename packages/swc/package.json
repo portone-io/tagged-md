@@ -12,10 +12,10 @@
   "keywords": [
     "swc-plugin"
   ],
-  "main": "target/wasm32-unknown-unknown/release/swc_plugin_tagged_md.wasm",
+  "main": "target/wasm32-unknown-unknown/debug/swc_plugin_tagged_md.wasm",
   "scripts": {
     "publish": "yarn prepublishOnly && yarn npm publish",
-    "prepublishOnly": "cargo build-wasm32 --release"
+    "prepublishOnly": "cargo build-wasm32"
   },
   "files": [],
   "preferUnplugged": true
