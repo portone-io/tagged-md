@@ -3,6 +3,11 @@
     "version": "0.1.0",
     "description": "SWC plugin for transforming tagged Markdown string to HTML",
     "author": "XiNiHa <me@xiniha.dev>",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/XiNiHa/tagged-md.git",
+      "directory": "packages/swc"
+    },
     "license": "MIT",
     "keywords": [
         "swc-plugin"
