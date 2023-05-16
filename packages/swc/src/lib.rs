@@ -20,9 +20,33 @@ impl VisitMut for TransformVisitor {
                     if tpl.tpl.quasis.len() != 1 {
                         panic!("md`` template literal shouldn't have any expressions inside");
                     }
+                    let lines = tpl
+                        .tpl
+                        .quasis
+                        .first()
+                        .unwrap()
+                        .cooked
+                        .as_ref()
+                        .unwrap()
+                        .lines();
+                    let mut min_indent = 0;
+                    let merged = lines
+                        .map(|line| {
+                            if !line.is_empty() {
+                                let indent = line.chars().take_while(|c| c.is_whitespace()).count();
+                                if min_indent == 0 || indent < min_indent {
+                                    min_indent = indent;
+                                }
+                                line.chars().skip(min_indent).collect::<String>()
+                            } else {
+                                line.to_string()
+                            }
+                        })
+                        .map(|line| line + "\n")
+                        .collect::<String>();
                     *expr = Lit::Str(Str {
                         span: DUMMY_SP,
-                        value: markdown::to_html(&tpl.tpl.quasis.first().unwrap().cooked.as_ref().unwrap().to_string()).into(),
+                        value: markdown::to_html(&merged).into(),
                         raw: None,
                     })
                     .into()
@@ -59,4 +83,16 @@ test!(
     processes_escaped_markdown,
     r#"console.log(md`**\`foo\`**`);"#,
     r#"console.log("<p><strong><code>foo</code></strong></p>");"#
+);
+
+test!(
+    Default::default(),
+    |_| as_folder(TransformVisitor),
+    deindents_indented_markdown,
+    r#"console.log(md`
+        # Yay
+
+        **\`foo\`**
+        `);"#,
+    r#"console.log("<h1>Yay</h1>\n<p><strong><code>foo</code></strong></p>\n");"#
 );
