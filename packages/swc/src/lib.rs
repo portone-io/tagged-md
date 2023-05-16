@@ -5,6 +5,7 @@ use swc_core::ecma::{
     ast::{Expr, Program},
     visit::{as_folder, FoldWith, VisitMut, VisitMutWith},
 };
+use swc_core::plugin::errors::HANDLER;
 use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
 
 struct TplElementInfo {
@@ -16,12 +17,14 @@ struct TplElementInfo {
 pub struct PluginConfig {
     #[serde(alias = "interpolationPlaceholder")]
     interpolation_placeholder: String,
+    gfm: bool,
 }
 
 impl Default for PluginConfig {
     fn default() -> Self {
         Self {
             interpolation_placeholder: r#"!TAGGED_MD_INTERPOLATION_PLACEHOLDER!"#.to_string(),
+            gfm: false,
         }
     }
 }
@@ -118,22 +121,42 @@ impl VisitMut for TransformVisitor {
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
-            let transformed = markdown::to_html(&merged);
-            *expr = Tpl {
-                exprs: tpl.tpl.exprs.clone(),
-                span: tpl.span,
-                quasis: transformed
-                    .split(&self.config.interpolation_placeholder)
-                    .zip(infos)
-                    .map(|(s, info)| TplElement {
-                        span: info.span,
-                        cooked: Some(s.into()),
-                        raw: s.into(),
-                        tail: info.tail,
-                    })
-                    .collect(),
+            let transformed = markdown::to_html_with_options(
+                &merged,
+                &match self.config {
+                    PluginConfig { gfm: true, .. } => markdown::Options::gfm(),
+                    PluginConfig { gfm: false, .. } => markdown::Options::default(),
+                },
+            );
+            match transformed {
+                Ok(transformed) => {
+                    *expr = Tpl {
+                        exprs: tpl.tpl.exprs.clone(),
+                        span: tpl.span,
+                        quasis: transformed
+                            .split(&self.config.interpolation_placeholder)
+                            .zip(infos)
+                            .map(|(s, info)| TplElement {
+                                span: info.span,
+                                cooked: Some(s.into()),
+                                raw: s.into(),
+                                tail: info.tail,
+                            })
+                            .collect(),
+                    }
+                    .into();
+                }
+                Err(error) => {
+                    HANDLER.with(|handler| {
+                        handler
+                            .struct_span_err(
+                                tpl.span,
+                                &format!("Failed to transform Markdown: {}", error),
+                            )
+                            .emit();
+                    });
+                }
             }
-            .into();
         }
     }
 }
