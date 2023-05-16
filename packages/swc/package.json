@@ -1,21 +1,21 @@
 {
-    "name": "swc-plugin-tagged-md",
-    "version": "0.2.1",
-    "description": "SWC plugin for transforming tagged Markdown string to HTML",
-    "author": "XiNiHa <me@xiniha.dev>",
-    "license": "(Apache-2.0 OR MIT)",
-    "repository": {
-      "type": "git",
-      "url": "https://github.com/portone-io/tagged-md.git",
-      "directory": "packages/swc"
-    },
-    "keywords": [
-        "swc-plugin"
-    ],
-    "main": "target/wasm32-unknown-unknown/release/swc_plugin_tagged_md.wasm",
-    "scripts": {
-        "prepublishOnly": "cargo build-wasm32 --release"
-    },
-    "files": [],
-    "preferUnplugged": true
+  "name": "swc-plugin-tagged-md",
+  "version": "0.2.1",
+  "description": "SWC plugin for transforming tagged Markdown string to HTML",
+  "author": "XiNiHa <me@xiniha.dev>",
+  "license": "(Apache-2.0 OR MIT)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/portone-io/tagged-md.git",
+    "directory": "packages/swc"
+  },
+  "keywords": [
+    "swc-plugin"
+  ],
+  "main": "target/wasm32-unknown-unknown/release/swc_plugin_tagged_md.wasm",
+  "scripts": {
+    "prepublishOnly": "cargo build-wasm32 --release"
+  },
+  "files": [],
+  "preferUnplugged": true
 }
