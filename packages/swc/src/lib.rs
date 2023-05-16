@@ -1,14 +1,20 @@
-use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
-use swc_core::{
-    common::DUMMY_SP,
-    ecma::{
-        ast::{Expr, Lit, Program, Str},
-        transforms::testing::test,
-        visit::{as_folder, FoldWith, VisitMut, VisitMutWith},
-    },
+use swc_core::common::Span;
+use swc_core::ecma::ast::{Tpl, TplElement};
+use swc_core::ecma::{
+    ast::{Expr, Program},
+    transforms::testing::test,
+    visit::{as_folder, FoldWith, VisitMut, VisitMutWith},
 };
+use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
 
 pub struct TransformVisitor;
+
+const INTERPOLATION_PLACEHOLDER: &str = r#"\\TAGGED_MD_INTERPOLATION_PLACEHOLDER\\"#;
+
+struct TplElementInfo {
+    span: Span,
+    tail: bool,
+}
 
 impl VisitMut for TransformVisitor {
     fn visit_mut_expr(&mut self, expr: &mut Expr) {
@@ -17,18 +23,29 @@ impl VisitMut for TransformVisitor {
         if let Expr::TaggedTpl(tpl) = expr {
             if let Expr::Ident(ident) = tpl.tag.as_mut() {
                 if ident.sym.eq("md") {
-                    if tpl.tpl.quasis.len() != 1 {
-                        panic!("md`` template literal shouldn't have any expressions inside");
-                    }
-                    let lines = tpl
+                    let (element_strings, infos) = tpl
                         .tpl
                         .quasis
-                        .first()
-                        .unwrap()
-                        .cooked
-                        .as_ref()
-                        .unwrap()
-                        .lines();
+                        .iter()
+                        .map(|q| {
+                            (
+                                q.cooked.clone().unwrap_or_else(|| q.raw.clone()),
+                                TplElementInfo {
+                                    span: q.span.clone(),
+                                    tail: q.tail,
+                                },
+                            )
+                        })
+                        .fold(
+                            (vec![], vec![]),
+                            |(mut str_vec, mut info_vec), (str, info)| {
+                                str_vec.push(str);
+                                info_vec.push(info);
+                                (str_vec, info_vec)
+                            },
+                        );
+                    let interpolation_replaced = element_strings.join(INTERPOLATION_PLACEHOLDER);
+                    let lines = interpolation_replaced.lines();
                     let mut min_indent = 0;
                     let merged = lines
                         .map(|line| {
@@ -44,12 +61,22 @@ impl VisitMut for TransformVisitor {
                         })
                         .collect::<Vec<_>>()
                         .join("\n");
-                    *expr = Lit::Str(Str {
-                        span: DUMMY_SP,
-                        value: markdown::to_html(&merged).into(),
-                        raw: None,
-                    })
-                    .into()
+                    let transformed = markdown::to_html(&merged);
+                    *expr = Tpl {
+                        exprs: tpl.tpl.exprs.clone(),
+                        span: tpl.span,
+                        quasis: transformed
+                            .split(INTERPOLATION_PLACEHOLDER)
+                            .zip(infos)
+                            .map(|(s, info)| TplElement {
+                                span: info.span,
+                                cooked: Some(s.into()),
+                                raw: s.into(),
+                                tail: info.tail,
+                            })
+                            .collect(),
+                    }
+                    .into();
                 }
             }
         }
@@ -66,7 +93,7 @@ test!(
     |_| as_folder(TransformVisitor),
     processes_markdown_paragraph,
     r#"console.log(md`foo`);"#,
-    r#"console.log("<p>foo</p>");"#
+    r#"console.log(`<p>foo</p>`);"#
 );
 
 test!(
@@ -74,7 +101,7 @@ test!(
     |_| as_folder(TransformVisitor),
     processes_markdown_bold,
     r#"console.log(md`**foo**`);"#,
-    r#"console.log("<p><strong>foo</strong></p>");"#
+    r#"console.log(`<p><strong>foo</strong></p>`);"#
 );
 
 test!(
@@ -82,7 +109,7 @@ test!(
     |_| as_folder(TransformVisitor),
     processes_escaped_markdown,
     r#"console.log(md`**\`foo\`**`);"#,
-    r#"console.log("<p><strong><code>foo</code></strong></p>");"#
+    r#"console.log(`<p><strong><code>foo</code></strong></p>`);"#
 );
 
 test!(
@@ -94,7 +121,9 @@ test!(
 
         **\`foo\`**
     `);"#,
-    r#"console.log("<h1>Yay</h1>\n<p><strong><code>foo</code></strong></p>\n");"#
+    r#"console.log(`<h1>Yay</h1>
+<p><strong><code>foo</code></strong></p>
+`);"#
 );
 
 test!(
@@ -102,5 +131,5 @@ test!(
     |_| as_folder(TransformVisitor),
     processes_expression_interpolation,
     r#"console.log(md`**\`${foo}\`**`);"#,
-    r#"console.log("<p><strong><code>${foo}</code></strong></p>\n");"#
+    r#"console.log(`<p><strong><code>${foo}</code></strong></p>`);"#
 );
